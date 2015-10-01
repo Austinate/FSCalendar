@@ -355,6 +355,14 @@
     }
 }
 
+- (void)setuseBorderEventHighlighting:(BOOL)useBorderEventHighlighting
+{
+    if (_useBorderEventHighlighting != useBorderEventHighlighting) {
+        _useBorderEventHighlighting = useBorderEventHighlighting;
+        [_calendar.collectionView.visibleCells makeObjectsPerformSelector:@selector(setNeedsLayout)];
+    }
+}
+
 - (void)setHeaderMinimumDissolvedAlpha:(CGFloat)headerMinimumDissolvedAlpha
 {
     if (_headerMinimumDissolvedAlpha != headerMinimumDissolvedAlpha) {

@@ -51,6 +51,7 @@ typedef NS_OPTIONS(NSInteger, FSCalendarCellStyle) {
 @property (assign, nonatomic) FSCalendarCellStyle cellStyle;
 @property (assign, nonatomic) BOOL autoAdjustTitleSize;
 @property (assign, nonatomic) BOOL useVeryShortWeekdaySymbols;
+@property (assign, nonatomic) BOOL useBorderEventHighlighting;
 
 // For preview only
 @property (assign, nonatomic) BOOL      fakeSubtitles;

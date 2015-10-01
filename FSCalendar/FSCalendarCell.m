@@ -167,19 +167,35 @@
     }
     
     _titleLabel.textColor = [self colorForCurrentStateInDictionary:_appearance.titleColors];
-    
-    _backgroundLayer.hidden = !self.selected && !self.dateIsToday && !self.dateIsSelected;
+
+
+    BOOL hasEvent = self.hasEvent;
+    _backgroundLayer.hidden = !hasEvent;
+    if (!_backgroundLayer.hidden) {
+        _backgroundLayer.path = _appearance.cellStyle == FSCalendarCellStyleCircle ?
+                [UIBezierPath bezierPathWithOvalInRect:_backgroundLayer.bounds].CGPath :
+                [UIBezierPath bezierPathWithRect:_backgroundLayer.bounds].CGPath;
+        _backgroundLayer.fillColor = [UIColor clearColor].CGColor;
+        _backgroundLayer.strokeColor = self.appearance.eventColor.CGColor;
+    }
+
+    BOOL shouldHighlightBackground = !self.selected && !self.dateIsToday && !self.dateIsSelected;
+        _backgroundLayer.hidden = (!hasEvent || !self.appearance.useBorderEventHighlighting) && shouldHighlightBackground;
     if (!_backgroundLayer.hidden) {
         _backgroundLayer.path = _appearance.cellStyle == FSCalendarCellStyleCircle ?
         [UIBezierPath bezierPathWithOvalInRect:_backgroundLayer.bounds].CGPath :
         [UIBezierPath bezierPathWithRect:_backgroundLayer.bounds].CGPath;
         _backgroundLayer.fillColor = [self colorForCurrentStateInDictionary:_appearance.backgroundColors].CGColor;
+        if (!self.appearance.useBorderEventHighlighting) {
+            _backgroundLayer.strokeColor = _backgroundLayer.fillColor;
+        }
     }
-    
+
+
     _imageView.image = _image;
     _imageView.hidden = !_image;
     
-    _eventLayer.hidden = !_hasEvent;
+    _eventLayer.hidden = !_hasEvent || self.appearance.useBorderEventHighlighting;
     if (!_eventLayer.hidden) {
         _eventLayer.fillColor = _appearance.eventColor.CGColor;
     }
