@@ -45,9 +45,9 @@
     
 //    [_calendar selectDate:[NSDate date]];
     
-    if (kFSCalendarShouldEnableTestMacros) {
-        FSCalendarTestSelectDate
-    }
+#if 0
+    FSCalendarTestSelectDate
+#endif
 }
 
 - (void)dealloc
@@ -68,7 +68,7 @@
 
 //- (BOOL)calendar:(FSCalendar *)calendar hasEventForDate:(NSDate *)date
 //{
-//    return date.fs_day == 3;
+//    return date.fs_day % 5 == 0;
 //}
 
 //- (NSDate *)minimumDateForCalendar:(FSCalendar *)calendar
