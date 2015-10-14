@@ -87,6 +87,7 @@
 
 - (BOOL)isDateInRange:(NSDate *)date;
 - (BOOL)isDateSelected:(NSDate *)date;
+- (BOOL)isDateInDifferentPage:(NSDate *)date;
 
 - (void)selectDate:(NSDate *)date scrollToDate:(BOOL)scrollToDate forPlaceholder:(BOOL)forPlaceholder;
 - (void)enqueueSelectedDate:(NSDate *)date;
@@ -280,12 +281,10 @@
                                                         );
             
         }
-        
         _topBorder.frame = CGRectMake(0, -1, self.fs_width, 1);
         _bottomBorder.frame = CGRectMake(0, self.fs_height, self.fs_width, 1);
         
     }
-    
     if (_needsAdjustingTextSize) {
         _needsAdjustingTextSize = NO;
         [_appearance adjustTitleIfNecessary];
@@ -524,10 +523,12 @@
 
 - (void)collectionView:(UICollectionView *)collectionView didDeselectItemAtIndexPath:(NSIndexPath *)indexPath
 {
-    NSIndexPath *selectedIndexPath = [self indexPathForDate:self.selectedDate];
-    if (!self.allowsMultipleSelection && ![indexPath isEqual:selectedIndexPath]) {
-        [self collectionView:collectionView didDeselectItemAtIndexPath:selectedIndexPath];
-        return;
+    if (!self.allowsMultipleSelection) {
+        NSIndexPath *selectedIndexPath = [self indexPathForDate:self.selectedDate];
+        if (![indexPath isEqual:selectedIndexPath]) {
+            [self collectionView:collectionView didDeselectItemAtIndexPath:selectedIndexPath];
+            return;
+        }
     }
     FSCalendarCell *cell = (FSCalendarCell *)[collectionView cellForItemAtIndexPath:indexPath];
     if (cell) {
@@ -535,19 +536,21 @@
         cell.dateIsSelected = NO;
         [cell setNeedsLayout];
     }
-    NSDate *selectedDate = self.selectedDate;
+    NSDate *selectedDate = cell.date ?: [self dateForIndexPath:indexPath];
     [_selectedDates removeObject:selectedDate];
     [self didDeselectDate:selectedDate];
 }
 
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldDeselectItemAtIndexPath:(NSIndexPath *)indexPath
 {
-    NSIndexPath *selectedIndexPath = [self indexPathForDate:self.selectedDate];
-    if (!self.allowsMultipleSelection && ![indexPath isEqual:selectedIndexPath]) {
-        return [self collectionView:collectionView shouldDeselectItemAtIndexPath:selectedIndexPath];
+    if (!self.allowsMultipleSelection) {
+        NSIndexPath *selectedIndexPath = [self indexPathForDate:self.selectedDate];
+        if (![indexPath isEqual:selectedIndexPath]) {
+            return [self collectionView:collectionView shouldDeselectItemAtIndexPath:selectedIndexPath];
+        }
     }
     FSCalendarCell *cell = (FSCalendarCell *)[collectionView cellForItemAtIndexPath:indexPath];
-    return [self shouldDeselectDate:cell.date ?: [self dateForIndexPath:indexPath]];
+    return [self shouldDeselectDate:(cell.date?:[self dateForIndexPath:indexPath])];
 }
 
 - (void)collectionView:(UICollectionView *)collectionView willDisplaySupplementaryView:(UICollectionReusableView *)view forElementKind:(NSString *)elementKind atIndexPath:(NSIndexPath *)indexPath
@@ -592,7 +595,7 @@
             [self didChangeValueForKey:@"currentPage"];
         }
         
-    } else {
+    } else if (_collectionView.indexPathsForVisibleItems.count) {
         CGFloat scrollOffset = 0;
         switch (_collectionViewLayout.scrollDirection) {
             case UICollectionViewScrollDirectionHorizontal: {
@@ -668,6 +671,7 @@
     _needsAdjustingTextSize = YES;
     [self setNeedsLayout];
     [self adjustRowHeight];
+    [_collectionViewLayout invalidateLayout]; // Necessary in Swift. Anyone can tell me why?
 }
 
 #pragma mark - Properties
@@ -694,13 +698,12 @@
         switch (_scope) {
             case FSCalendarScopeMonth: {
                 _supressEvent = YES;
-                NSDate *currentPage = self.currentPage;
+
                 _collectionViewLayout.scrollDirection = (UICollectionViewScrollDirection)scrollDirection;
                 _header.scrollDirection = _collectionViewLayout.scrollDirection;
                 if (!CGRectEqualToRect(_collectionView.frame, CGRectZero)) {
-                    [self layoutSubviews];
+                    _needsAdjustingMonthPosition = YES;
                     [self reloadData];
-                    [self scrollToDate:currentPage];
                 }
                 _supressEvent = NO;
                 break;
@@ -765,7 +768,7 @@
     if (![self isDateInRange:currentPage]) {
         [NSException raise:@"currentMonth out of range" format:@""];
     }
-    if (![_currentPage fs_isEqualToDateForMonth:currentPage]) {
+    if ([self isDateInDifferentPage:currentPage]) {
         currentPage = currentPage.fs_dateByIgnoringTimeComponents;
         [self scrollToPageForDate:currentPage animated:animated];
     }
@@ -894,9 +897,11 @@
                                         height);
     }];
     
-    _needsReloadingSelectingDates = YES;
     [_collectionView reloadData];
     [_header reloadData];
+    
+    _needsReloadingSelectingDates = YES;
+    [self setNeedsLayout];
 }
 
 - (void)setScope:(FSCalendarScope)scope animated:(BOOL)animated
@@ -1090,6 +1095,13 @@
     if (forPlaceholder) {
         
         // 跨月份选中日期，需要触发各类事件
+        if (self.allowsMultipleSelection && [self isDateSelected:targetDate]) {
+            // 在多选模式下，点击了已经选中的跨月日期
+            BOOL shouldDeselect = [self shouldDeselectDate:targetDate];
+            if (!shouldDeselect) {
+                return;
+            }
+        }
         shouldSelect &= [self shouldSelectDate:targetDate];
         if (shouldSelect && ![self isDateSelected:targetDate]) {
             if (_collectionView.indexPathsForSelectedItems.count && self.selectedDate && !self.allowsMultipleSelection) {
@@ -1197,7 +1209,7 @@
 - (void)scrollToPageForDate:(NSDate *)date animated:(BOOL)animated
 {
     if (!_collectionView.tracking && !_collectionView.decelerating) {
-        if (_pagingEnabled && ![_currentPage fs_isEqualToDateForMonth:date]) {
+        if (_pagingEnabled && [self isDateInDifferentPage:date]) {
             [self willChangeValueForKey:@"currentPage"];
             switch (_scope) {
                 case FSCalendarScopeMonth: {
@@ -1307,6 +1319,19 @@
 - (BOOL)isDateSelected:(NSDate *)date
 {
     return [self.selectedDates containsObject:date] || [_collectionView.indexPathsForSelectedItems containsObject:[self indexPathForDate:date]];
+}
+
+- (BOOL)isDateInDifferentPage:(NSDate *)date
+{
+    if (!_pagingEnabled) {
+        return ![date fs_isEqualToDateForMonth:_currentPage];
+    }
+    switch (_scope) {
+        case FSCalendarScopeMonth:
+            return ![date fs_isEqualToDateForMonth:_currentPage];
+        case FSCalendarScopeWeek:
+            return ![date fs_isEqualToDateForWeek:_currentPage];
+    }
 }
 
 - (void)adjustRowHeight
